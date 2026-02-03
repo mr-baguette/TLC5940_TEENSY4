@@ -54,7 +54,7 @@
 
 // GSCLK generation (Hz). Set to 0 to use an external GSCLK source.
 #ifndef TLC5940_GSCLK_FREQUENCY_HZ
-#define TLC5940_GSCLK_FREQUENCY_HZ 0
+#define TLC5940_GSCLK_FREQUENCY_HZ 2000000
 #endif
 
 // Use CCM_CLKO output for GSCLK when available (Teensy 4.x). Requires a CCM_CLKO pin.

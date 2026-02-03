@@ -32,6 +32,8 @@ void TLC5940Teensy4::begin() {
   setControlMode_(false);
 
   configureGsclk_();
+
+  digitalWrite(TLC5940_PIN_BLANK, LOW);
 }
 
 void TLC5940Teensy4::set(uint16_t channel, uint16_t value) {
