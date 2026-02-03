@@ -42,9 +42,19 @@
 #define TLC5940_USE_SPI 1
 #endif
 
+// Select which SPI bus to use (e.g. SPI, SPI1, SPI2 on Teensy 4.1).
+#ifndef TLC5940_SPI_CLASS
+#define TLC5940_SPI_CLASS SPI
+#endif
+
 // SPI settings
 #ifndef TLC5940_SPI_CLOCK
 #define TLC5940_SPI_CLOCK 10000000
+#endif
+
+// GSCLK generation (Hz). Set to 0 to use an external GSCLK source.
+#ifndef TLC5940_GSCLK_FREQUENCY_HZ
+#define TLC5940_GSCLK_FREQUENCY_HZ 0
 #endif
 
 // Dot-correction support (requires VPRG wiring).

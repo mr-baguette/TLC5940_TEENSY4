@@ -14,7 +14,7 @@ timing, and ISR-driven GSCLK handling). Contributions and testing are welcome.
 ## Usage
 
 1. Copy the library into your Arduino libraries folder.
-2. Adjust `src/TLC5940_config.h` to match your wiring, including XERR and VPRG options.
+2. Adjust `src/TLC5940_config.h` to match your wiring, including XERR/VPRG options, SPI bus selection, and GSCLK frequency.
 3. Include and use `TLC5940_Teensy4` in your sketch (`set()`, `update()`, and optional dot-correction).
 
 ## Example

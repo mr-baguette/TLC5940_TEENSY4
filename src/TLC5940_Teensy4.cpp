@@ -26,10 +26,15 @@ void TLC5940Teensy4::begin() {
   digitalWrite(TLC5940_PIN_SCLK, LOW);
 
 #if TLC5940_USE_SPI
-  SPI.begin();
+  TLC5940_SPI_CLASS.begin();
 #endif
 
   setControlMode_(false);
+
+#if TLC5940_GSCLK_FREQUENCY_HZ > 0
+  analogWriteFrequency(TLC5940_PIN_GSCLK, TLC5940_GSCLK_FREQUENCY_HZ);
+  analogWrite(TLC5940_PIN_GSCLK, 128);
+#endif
 }
 
 void TLC5940Teensy4::set(uint16_t channel, uint16_t value) {
@@ -104,7 +109,8 @@ TLC5940Teensy4::XerrType TLC5940Teensy4::xerrType() const {
 
 void TLC5940Teensy4::writeGrayscaleData_() {
 #if TLC5940_USE_SPI
-  SPI.beginTransaction(SPISettings(TLC5940_SPI_CLOCK, MSBFIRST, SPI_MODE0));
+  TLC5940_SPI_CLASS.beginTransaction(
+      SPISettings(TLC5940_SPI_CLOCK, MSBFIRST, SPI_MODE0));
 #endif
 
   for (int16_t channel = kChannels - 1; channel >= 0; --channel) {
@@ -113,8 +119,8 @@ void TLC5940Teensy4::writeGrayscaleData_() {
     const uint8_t low = static_cast<uint8_t>((value & 0x000F) << 4);
 
 #if TLC5940_USE_SPI
-    SPI.transfer(high);
-    SPI.transfer(low);
+    TLC5940_SPI_CLASS.transfer(high);
+    TLC5940_SPI_CLASS.transfer(low);
 #else
     writeBitBangByte_(high);
     writeBitBangByte_(low);
@@ -122,14 +128,15 @@ void TLC5940Teensy4::writeGrayscaleData_() {
   }
 
 #if TLC5940_USE_SPI
-  SPI.endTransaction();
+  TLC5940_SPI_CLASS.endTransaction();
 #endif
 }
 
 #if TLC5940_VPRG_ENABLED
 void TLC5940Teensy4::writeDotCorrectionData_() {
 #if TLC5940_USE_SPI
-  SPI.beginTransaction(SPISettings(TLC5940_SPI_CLOCK, MSBFIRST, SPI_MODE0));
+  TLC5940_SPI_CLASS.beginTransaction(
+      SPISettings(TLC5940_SPI_CLOCK, MSBFIRST, SPI_MODE0));
 #endif
 
   for (int16_t channel = kChannels - 1; channel >= 0; --channel) {
@@ -137,14 +144,14 @@ void TLC5940Teensy4::writeDotCorrectionData_() {
     const uint8_t packed = static_cast<uint8_t>(value << 2);
 
 #if TLC5940_USE_SPI
-    SPI.transfer(packed);
+    TLC5940_SPI_CLASS.transfer(packed);
 #else
     writeBitBangByte_(packed);
 #endif
   }
 
 #if TLC5940_USE_SPI
-  SPI.endTransaction();
+  TLC5940_SPI_CLASS.endTransaction();
 #endif
 }
 #endif
