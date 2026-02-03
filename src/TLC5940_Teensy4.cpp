@@ -31,10 +31,7 @@ void TLC5940Teensy4::begin() {
 
   setControlMode_(false);
 
-#if TLC5940_GSCLK_FREQUENCY_HZ > 0
-  analogWriteFrequency(TLC5940_PIN_GSCLK, TLC5940_GSCLK_FREQUENCY_HZ);
-  analogWrite(TLC5940_PIN_GSCLK, 128);
-#endif
+  configureGsclk_();
 }
 
 void TLC5940Teensy4::set(uint16_t channel, uint16_t value) {
@@ -194,4 +191,30 @@ void TLC5940Teensy4::updateXerrType_(bool xerrLow, bool blankPulseActive) {
   } else {
     lastXerrType_ = XerrType::kThermal;
   }
+}
+
+void TLC5940Teensy4::configureGsclk_() {
+#if TLC5940_GSCLK_FREQUENCY_HZ > 0
+#if TLC5940_GSCLK_USE_CCM_CLKO && (defined(ARDUINO_TEENSY40) || defined(ARDUINO_TEENSY41))
+  if (TLC5940_PIN_GSCLK == TLC5940_GSCLK_CCM_CLKO_PIN) {
+#if defined(CCM_CSCMR1_CLK_OUT_SEL_MASK) && defined(CCM_CSCMR1_CLK_OUT_PODF_MASK)
+    const uint32_t divider = (TLC5940_GSCLK_CCM_CLKO_DIVIDER > 0)
+                                 ? (TLC5940_GSCLK_CCM_CLKO_DIVIDER - 1)
+                                 : 0;
+    CCM_CSCMR1 = (CCM_CSCMR1 &
+                  ~(CCM_CSCMR1_CLK_OUT_SEL_MASK | CCM_CSCMR1_CLK_OUT_PODF_MASK)) |
+                 CCM_CSCMR1_CLK_OUT_SEL(0) | CCM_CSCMR1_CLK_OUT_PODF(divider);
+#endif
+#if defined(CCM_CCGR6) && defined(CCM_CCGR6_CLKO1) && defined(CCM_CCGR_ON)
+    CCM_CCGR6 |= CCM_CCGR6_CLKO1(CCM_CCGR_ON);
+#endif
+#if defined(IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_07)
+    IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_07 = 1;
+#endif
+    return;
+  }
+#endif
+  analogWriteFrequency(TLC5940_PIN_GSCLK, TLC5940_GSCLK_FREQUENCY_HZ);
+  analogWrite(TLC5940_PIN_GSCLK, 128);
+#endif
 }

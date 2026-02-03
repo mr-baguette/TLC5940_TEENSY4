@@ -47,6 +47,7 @@ private:
   void writeBitBangByte_(uint8_t value);
   void pulseBlank_();
   void updateXerrType_(bool xerrLow, bool blankPulseActive);
+  void configureGsclk_();
 };
 
 #endif // TLC5940_TEENSY4_H

@@ -57,6 +57,21 @@
 #define TLC5940_GSCLK_FREQUENCY_HZ 0
 #endif
 
+// Use CCM_CLKO output for GSCLK when available (Teensy 4.x). Requires a CCM_CLKO pin.
+#ifndef TLC5940_GSCLK_USE_CCM_CLKO
+#define TLC5940_GSCLK_USE_CCM_CLKO 0
+#endif
+
+// CCM_CLKO pin to use when TLC5940_GSCLK_USE_CCM_CLKO is enabled.
+#ifndef TLC5940_GSCLK_CCM_CLKO_PIN
+#define TLC5940_GSCLK_CCM_CLKO_PIN 23
+#endif
+
+// Divider for CCM_CLKO output when enabled (1 = no divide).
+#ifndef TLC5940_GSCLK_CCM_CLKO_DIVIDER
+#define TLC5940_GSCLK_CCM_CLKO_DIVIDER 1
+#endif
+
 // Dot-correction support (requires VPRG wiring).
 #ifndef TLC5940_VPRG_ENABLED
 #define TLC5940_VPRG_ENABLED 1
