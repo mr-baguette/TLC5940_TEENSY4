@@ -116,17 +116,31 @@ void TLC5940Teensy4::writeGrayscaleData_() {
       SPISettings(TLC5940_SPI_CLOCK, MSBFIRST, SPI_MODE0));
 #endif
 
-  for (int16_t channel = kChannels - 1; channel >= 0; --channel) {
-    const uint16_t value = grayscale_[channel];
-    const uint8_t high = static_cast<uint8_t>(value >> 4);
-    const uint8_t low = static_cast<uint8_t>((value & 0x000F) << 4);
+  uint16_t bitBuffer = 0;
+  uint8_t bitCount = 0;
 
+  for (int16_t channel = kChannels - 1; channel >= 0; --channel) {
+    const uint16_t value = grayscale_[channel] & 0x0FFF;
+    bitBuffer = static_cast<uint16_t>((bitBuffer << 12) | value);
+    bitCount = static_cast<uint8_t>(bitCount + 12);
+
+    while (bitCount >= 8) {
+      const uint8_t out = static_cast<uint8_t>(bitBuffer >> (bitCount - 8));
 #if TLC5940_USE_SPI
-    TLC5940_SPI_CLASS.transfer(high);
-    TLC5940_SPI_CLASS.transfer(low);
+      TLC5940_SPI_CLASS.transfer(out);
 #else
-    writeBitBangByte_(high);
-    writeBitBangByte_(low);
+      writeBitBangByte_(out);
+#endif
+      bitCount = static_cast<uint8_t>(bitCount - 8);
+    }
+  }
+
+  if (bitCount > 0) {
+    const uint8_t out = static_cast<uint8_t>(bitBuffer << (8 - bitCount));
+#if TLC5940_USE_SPI
+    TLC5940_SPI_CLASS.transfer(out);
+#else
+    writeBitBangByte_(out);
 #endif
   }
 
@@ -142,14 +156,31 @@ void TLC5940Teensy4::writeDotCorrectionData_() {
       SPISettings(TLC5940_SPI_CLOCK, MSBFIRST, SPI_MODE0));
 #endif
 
-  for (int16_t channel = kChannels - 1; channel >= 0; --channel) {
-    const uint8_t value = dotCorrection_[channel] & 0x3F;
-    const uint8_t packed = static_cast<uint8_t>(value << 2);
+  uint16_t bitBuffer = 0;
+  uint8_t bitCount = 0;
 
+  for (int16_t channel = kChannels - 1; channel >= 0; --channel) {
+    const uint16_t value = static_cast<uint16_t>(dotCorrection_[channel] & 0x3F);
+    bitBuffer = static_cast<uint16_t>((bitBuffer << 6) | value);
+    bitCount = static_cast<uint8_t>(bitCount + 6);
+
+    while (bitCount >= 8) {
+      const uint8_t out = static_cast<uint8_t>(bitBuffer >> (bitCount - 8));
 #if TLC5940_USE_SPI
-    TLC5940_SPI_CLASS.transfer(packed);
+      TLC5940_SPI_CLASS.transfer(out);
 #else
-    writeBitBangByte_(packed);
+      writeBitBangByte_(out);
+#endif
+      bitCount = static_cast<uint8_t>(bitCount - 8);
+    }
+  }
+
+  if (bitCount > 0) {
+    const uint8_t out = static_cast<uint8_t>(bitBuffer << (8 - bitCount));
+#if TLC5940_USE_SPI
+    TLC5940_SPI_CLASS.transfer(out);
+#else
+    writeBitBangByte_(out);
 #endif
   }
 
