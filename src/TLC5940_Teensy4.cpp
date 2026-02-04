@@ -70,15 +70,19 @@ void TLC5940Teensy4::setAllDc(uint8_t value) {
 
 void TLC5940Teensy4::update() {
   setControlMode_(false);
+  digitalWrite(TLC5940_PIN_BLANK, HIGH);
   writeGrayscaleData_();
   latch_();
+  digitalWrite(TLC5940_PIN_BLANK, LOW);
 }
 
 #if TLC5940_VPRG_ENABLED
 void TLC5940Teensy4::updateDc() {
   setControlMode_(true);
+  digitalWrite(TLC5940_PIN_BLANK, HIGH);
   writeDotCorrectionData_();
   latch_();
+  digitalWrite(TLC5940_PIN_BLANK, LOW);
   setControlMode_(false);
 }
 #endif

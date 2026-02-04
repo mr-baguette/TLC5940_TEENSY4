@@ -49,16 +49,12 @@
 
 // SPI settings
 #ifndef TLC5940_SPI_CLOCK
-#define TLC5940_SPI_CLOCK 20000000
+#define TLC5940_SPI_CLOCK 10000000
 #endif
 
 // GSCLK generation (Hz). Set to 0 to use an external GSCLK source.
 #ifndef TLC5940_GSCLK_FREQUENCY_HZ
-<<<<<<< Updated upstream
 #define TLC5940_GSCLK_FREQUENCY_HZ 2000000
-=======
-#define TLC5940_GSCLK_FREQUENCY_HZ 20000000
->>>>>>> Stashed changes
 #endif
 
 // Use CCM_CLKO output for GSCLK when available (Teensy 4.x). Requires a CCM_CLKO pin.
