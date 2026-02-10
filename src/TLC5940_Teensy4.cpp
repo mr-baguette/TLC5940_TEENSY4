@@ -19,6 +19,7 @@ TLC5940Teensy4::TLC5940Teensy4() {
 }
 
 void TLC5940Teensy4::begin() {
+  // Set all pins to output mode
   pinMode(TLC5940_PIN_SIN, OUTPUT);
   pinMode(TLC5940_PIN_SCLK, OUTPUT);
   pinMode(TLC5940_PIN_XLAT, OUTPUT);
@@ -28,18 +29,16 @@ void TLC5940Teensy4::begin() {
   pinMode(TLC5940_PIN_VPRG, OUTPUT);
   pinMode(TLC5940_PIN_XERR, INPUT_PULLUP);
 
-  // Initial state: Blank High (LEDs off)
   digitalWrite(TLC5940_PIN_BLANK, HIGH);
   digitalWrite(TLC5940_PIN_XLAT, LOW);
-  digitalWrite(TLC5940_PIN_SCLK, LOW);
 
 #if TLC5940_USE_SPI
   TLC5940_SPI_CLASS.begin();
 #endif
 
   setControlMode_(false);
-
-  // Configure the hardware timers for GSCLK and BLANK
+  
+  // Call the new unified timer config
   configureTimers_();
 
   digitalWrite(TLC5940_PIN_BLANK, LOW);
@@ -207,106 +206,66 @@ void TLC5940Teensy4::updateXerrType_(bool xerrLow, bool blankPulseActive) {
 // FIXED TIMER CONFIGURATION
 // ----------------------------------------------------------------------
 void TLC5940Teensy4::configureTimers_() {
-#if TLC5940_GSCLK_FREQUENCY_HZ > 0 && (defined(ARDUINO_TEENSY40) || defined(ARDUINO_TEENSY41))
+  CCM_CCGR4 |= CCM_CCGR4_PWM4(CCM_CCGR_ON); // Power on FlexPWM4
   
-  // 1. Enable Clock for FLEXPWM4
-  CCM_CCGR4 |= CCM_CCGR4_PWM4(CCM_CCGR_ON);
-
-  // 2. Configure Pin 5 for PWM Output (GSCLK)
 #if defined(CORE_PIN5_CONFIG)
-  CORE_PIN5_CONFIG = 1; // Set as Output controlled by FlexPWM
+  CORE_PIN5_CONFIG = 1; // Direct hardware control of Pin 5
 #endif
 
-  // 3. Calculate TICKS precisely
-  // This is where Codex failed. We must use integer ticks for both to ensure 1:4096 ratio.
-  // F_BUS_ACTUAL is usually 150MHz on Teensy 4.1
-  uint32_t busFreq = F_BUS_ACTUAL;
+  uint32_t busFreq = F_BUS_ACTUAL; // Usually 150MHz
   uint32_t gsclkTicks = busFreq / TLC5940_GSCLK_FREQUENCY_HZ;
   
-  // Safety clamps
-  if (gsclkTicks < 2) gsclkTicks = 2;
-  if (gsclkTicks > 65535) gsclkTicks = 65535;
-
-  // Frame Ticks is EXACTLY 4096 * gsclkTicks
-  // We need to fit this into a 16-bit register, which is impossible (4096 * 2 > 65535).
-  // So we MUST use the Prescaler for the Frame Timer (SM3).
-  
+  // Calculate Frame Ticks (Exactly 4096 GSCLK cycles)
   uint32_t totalFrameTicks = gsclkTicks * 4096;
   uint8_t prescaler = 0;
-  uint32_t frameRegisterValue = totalFrameTicks;
-
-  // Calculate required prescaler for SM3 to fit the count
-  while (frameRegisterValue > 65535) {
-      frameRegisterValue >>= 1; // Divide by 2
+  while (totalFrameTicks > 65535) {
+      totalFrameTicks >>= 1;
       prescaler++;
   }
-  
-  // 4. Configure SM2 (GSCLK) - Fast and Unprescaled
-  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_CLDOK(1 << GSCLK_SUBMODULE);
-  FLEXPWM4_SM2CTRL = FLEXPWM_SMCTRL_FULL | FLEXPWM_SMCTRL_PRSC(0); // No prescale
-  FLEXPWM4_SM2CTRL2 = FLEXPWM_SMCTRL2_INDEP; // Independent pair
+
+  // Configure SM2 (GSCLK generator)
+  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_CLDOK(1 << 2);
+  FLEXPWM4_SM2CTRL = FLEXPWM_SMCTRL_FULL | FLEXPWM_SMCTRL_PRSC(0);
   FLEXPWM4_SM2INIT = 0;
-  FLEXPWM4_SM2VAL0 = 0;
-  FLEXPWM4_SM2VAL1 = gsclkTicks - 1;      // Period
-  FLEXPWM4_SM2VAL3 = gsclkTicks / 2;      // Duty Cycle (50%)
-  
-  // Enable output on Pin 5 (PWM A)
-  FLEXPWM4_OUTEN |= FLEXPWM_OUTEN_PWMA_EN(1 << GSCLK_SUBMODULE);
+  FLEXPWM4_SM2VAL1 = gsclkTicks - 1;
+  FLEXPWM4_SM2VAL3 = gsclkTicks / 2; // 50% Duty cycle
+  FLEXPWM4_OUTEN |= FLEXPWM_OUTEN_PWMA_EN(1 << 2);
 
-  // 5. Configure SM3 (Frame Timer) - Slow and Prescaled
-  // It doesn't output to a pin, it just interrupts us.
-  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_CLDOK(1 << FRAME_SUBMODULE);
+  // Configure SM3 (Internal BLANK trigger)
+  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_CLDOK(1 << 3);
   FLEXPWM4_SM3CTRL = FLEXPWM_SMCTRL_FULL | FLEXPWM_SMCTRL_PRSC(prescaler);
-  FLEXPWM4_SM3CTRL2 = FLEXPWM_SMCTRL2_INDEP;
-  FLEXPWM4_SM3INIT = 0;
-  FLEXPWM4_SM3VAL0 = 0;
-  FLEXPWM4_SM3VAL1 = frameRegisterValue - 1; // Period matches 4096 GSCLKs
-
-  // Interrupt Setup for SM3
-  FLEXPWM4_SM3STS = FLEXPWM_SMSTS_RF; // Clear flag
-  FLEXPWM4_SM3INTEN = FLEXPWM_SMINTEN_RIE; // Enable Reload Interrupt
+  FLEXPWM4_SM3VAL1 = totalFrameTicks - 1;
+  FLEXPWM4_SM3STS = FLEXPWM_SMSTS_RF; 
+  FLEXPWM4_SM3INTEN = FLEXPWM_SMINTEN_RIE; // Interrupt on reload
   
   instance_ = this;
   attachInterruptVector(IRQ_FLEXPWM4_3, onFrameSyncIsr_);
-  NVIC_SET_PRIORITY(IRQ_FLEXPWM4_3, 32); // High priority
   NVIC_ENABLE_IRQ(IRQ_FLEXPWM4_3);
 
-  // 6. ATOMIC START
-  // This is critical. Start both submodules at the exact same time.
-  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_LDOK(1<<GSCLK_SUBMODULE | 1<<FRAME_SUBMODULE);
-  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_RUN(1<<GSCLK_SUBMODULE | 1<<FRAME_SUBMODULE);
-#endif
+  // Start both timers at the EXACT same clock cycle
+  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_LDOK(1<<2 | 1<<3);
+  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_RUN(1<<2 | 1<<3);
 }
 
 // ----------------------------------------------------------------------
 // INTERRUPT SERVICE ROUTINE
 // ----------------------------------------------------------------------
 void TLC5940Teensy4::onFrameSyncIsr_() {
-#if TLC5940_GSCLK_FREQUENCY_HZ > 0 && (defined(ARDUINO_TEENSY40) || defined(ARDUINO_TEENSY41))
-  // Clear the interrupt flag immediately
-  FLEXPWM4_SM3STS = FLEXPWM_SMSTS_RF;
+  FLEXPWM4_SM3STS = FLEXPWM_SMSTS_RF; // Clear hardware flag
   
-  // Handle the Logic
   if (instance_) {
-     // 1. Pulse BLANK High to reset the TLC5940 counter
      digitalWriteFast(TLC5940_PIN_BLANK, HIGH);
      
-     // 2. If we have new data pending, Latch it now while Blank is High
      if (instance_->pendingLatch_) {
         digitalWriteFast(TLC5940_PIN_XLAT, HIGH);
-        // Short delay to ensure setup time (Teensy 4 is very fast)
         asm volatile("nop\n\tnop\n\tnop\n\tnop"); 
         digitalWriteFast(TLC5940_PIN_XLAT, LOW);
         instance_->pendingLatch_ = false;
-        
-        // Ensure we exit DC mode if we were in it
         instance_->setControlMode_(false);
      }
      
-     // 3. BLANK Low to restart the cycle
      digitalWriteFast(TLC5940_PIN_BLANK, LOW);
   }
-#endif
 }
 
 // Stub for the separated configuration function Codex generated
