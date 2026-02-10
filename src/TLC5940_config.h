@@ -10,19 +10,19 @@
 
 // Pin assignments (Teensy 4.1 defaults can be overridden in a sketch).
 #ifndef TLC5940_PIN_SIN
-#define TLC5940_PIN_SIN 11
+#define TLC5940_PIN_SIN 26
 #endif
 
 #ifndef TLC5940_PIN_SCLK
-#define TLC5940_PIN_SCLK 13
+#define TLC5940_PIN_SCLK 27
 #endif
 
 #ifndef TLC5940_PIN_XLAT
-#define TLC5940_PIN_XLAT 10
+#define TLC5940_PIN_XLAT 28
 #endif
 
 #ifndef TLC5940_PIN_BLANK
-#define TLC5940_PIN_BLANK 9
+#define TLC5940_PIN_BLANK 30
 #endif
 
 // For register-driven FlexPWM GSCLK output, default to Teensy 4.1 pin 5 (FlexPWM4_2 A).
@@ -35,7 +35,7 @@
 #endif
 
 #ifndef TLC5940_PIN_VPRG
-#define TLC5940_PIN_VPRG 6
+#define TLC5940_PIN_VPRG 25
 #endif
 
 // Enable hardware SPI for grayscale data transfer when possible.
@@ -45,7 +45,7 @@
 
 // Select which SPI bus to use (e.g. SPI, SPI1, SPI2 on Teensy 4.1).
 #ifndef TLC5940_SPI_CLASS
-#define TLC5940_SPI_CLASS SPI
+#define TLC5940_SPI_CLASS SPI1
 #endif
 
 // SPI settings
