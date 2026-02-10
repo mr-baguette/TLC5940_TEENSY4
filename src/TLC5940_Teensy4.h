@@ -28,7 +28,6 @@ private:
     uint8_t dotCorrection_[kChannels];
 #endif
 
-    // MUST be volatile for ISR visibility
     volatile bool pendingLatch_ = false;
     uint32_t lastBlankPulseMicros_ = 0;
     XerrType lastXerrType_ = XerrType::kNone;
@@ -39,19 +38,19 @@ private:
     void writeBitBangByte_(uint8_t value);
     void pulseBlank_();
     void updateXerrType_(bool xerrLow, bool blankPulseActive);
+    void latch_(); // <--- ADDED THIS LINE
 
 #if TLC5940_VPRG_ENABLED
     void writeDotCorrectionData_();
 #endif
 
-    // Hardware Interface
     static TLC5940Teensy4* instance_;
     static void onFrameSyncIsr_();
 
-    // Codex Stubs
-    void configureGsclk_() {}
-    void configureFrameSyncIsr_() {}
-    void handleFrameSync_() {}
+    // Codex Stubs (Removed the {} so they don't conflict with the .cpp)
+    void configureGsclk_();
+    void configureFrameSyncIsr_();
+    void handleFrameSync_();
 };
 
 #endif
