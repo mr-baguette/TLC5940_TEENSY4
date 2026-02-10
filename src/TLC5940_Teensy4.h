@@ -40,7 +40,6 @@ private:
   uint32_t lastBlankPulseMicros_ = 0;
   XerrType lastXerrType_ = XerrType::kNone;
   volatile bool pendingLatch_ = false;
-  IntervalTimer frameTimer_;
 
   void writeGrayscaleData_();
 #if TLC5940_VPRG_ENABLED
@@ -52,8 +51,9 @@ private:
   void pulseBlank_();
   void updateXerrType_(bool xerrLow, bool blankPulseActive);
   void configureGsclk_();
-  static void onFrameTimerThunk_();
-  void onFrameTimerIsr_();
+  void configureFrameSyncIsr_();
+  static void onFrameSyncIsr_();
+  void handleFrameSync_();
 };
 
 #endif // TLC5940_TEENSY4_H

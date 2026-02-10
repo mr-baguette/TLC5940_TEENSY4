@@ -34,12 +34,7 @@ void TLC5940Teensy4::begin() {
   setControlMode_(false);
 
   configureGsclk_();
-
-  instance_ = this;
-#if TLC5940_GSCLK_FREQUENCY_HZ > 0
-  const float framePeriodUs = 4096.0f * (1000000.0f / TLC5940_GSCLK_FREQUENCY_HZ);
-  frameTimer_.begin(onFrameTimerThunk_, framePeriodUs);
-#endif
+  configureFrameSyncIsr_();
 
   digitalWrite(TLC5940_PIN_BLANK, LOW);
 }
@@ -231,40 +226,94 @@ void TLC5940Teensy4::updateXerrType_(bool xerrLow, bool blankPulseActive) {
 }
 
 void TLC5940Teensy4::configureGsclk_() {
-#if TLC5940_GSCLK_FREQUENCY_HZ > 0
-#if TLC5940_GSCLK_USE_CCM_CLKO && (defined(ARDUINO_TEENSY40) || defined(ARDUINO_TEENSY41))
-  if (TLC5940_PIN_GSCLK == TLC5940_GSCLK_CCM_CLKO_PIN) {
-#if defined(CCM_CSCMR1_CLK_OUT_SEL_MASK) && defined(CCM_CSCMR1_CLK_OUT_PODF_MASK)
-    const uint32_t divider = (TLC5940_GSCLK_CCM_CLKO_DIVIDER > 0)
-                                 ? (TLC5940_GSCLK_CCM_CLKO_DIVIDER - 1)
-                                 : 0;
-    CCM_CSCMR1 = (CCM_CSCMR1 &
-                  ~(CCM_CSCMR1_CLK_OUT_SEL_MASK | CCM_CSCMR1_CLK_OUT_PODF_MASK)) |
-                 CCM_CSCMR1_CLK_OUT_SEL(0) | CCM_CSCMR1_CLK_OUT_PODF(divider);
+#if TLC5940_GSCLK_FREQUENCY_HZ > 0 && (defined(ARDUINO_TEENSY40) || defined(ARDUINO_TEENSY41))
+  // Direct FlexPWM register setup for Teensy 4.x: FLEXPWM4 submodule 2 on pin 5.
+  CCM_CCGR4 |= CCM_CCGR4_PWM4(CCM_CCGR_ON);
+
+#if defined(CORE_PIN5_CONFIG)
+  CORE_PIN5_CONFIG = 1;
 #endif
-#if defined(CCM_CCGR6) && defined(CCM_CCGR6_CLKO1) && defined(CCM_CCGR_ON)
-    CCM_CCGR6 |= CCM_CCGR6_CLKO1(CCM_CCGR_ON);
-#endif
-#if defined(IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_07)
-    IOMUXC_SW_MUX_CTL_PAD_GPIO_AD_B1_07 = 1;
-#endif
-    return;
+
+  uint32_t ticks = F_BUS_ACTUAL / TLC5940_GSCLK_FREQUENCY_HZ;
+  if (ticks < 2) {
+    ticks = 2;
   }
-#endif
-  // Teensy 4.x analogWrite backend is FlexPWM-based; keep GSCLK generation on
-  // hardware PWM while BLANK/XLAT are synchronized by frameTimer_ ISR.
-  analogWriteFrequency(TLC5940_PIN_GSCLK, TLC5940_GSCLK_FREQUENCY_HZ);
-  analogWrite(TLC5940_PIN_GSCLK, 128);
+  if (ticks > 65535) {
+    ticks = 65535;
+  }
+  const uint16_t modulo = static_cast<uint16_t>(ticks - 1);
+
+  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_CLDOK(1 << 2);
+  FLEXPWM4_SM2CTRL2 = FLEXPWM_SMCTRL2_INDEP;
+  FLEXPWM4_SM2CTRL = FLEXPWM_SMCTRL_FULL | FLEXPWM_SMCTRL_PRSC(0);
+  FLEXPWM4_SM2INIT = 0;
+  FLEXPWM4_SM2VAL0 = 0;
+  FLEXPWM4_SM2VAL1 = modulo;
+  FLEXPWM4_SM2VAL2 = 0;
+  FLEXPWM4_SM2VAL3 = modulo / 2;
+  FLEXPWM4_SM2VAL4 = 0;
+  FLEXPWM4_SM2VAL5 = 0;
+  FLEXPWM4_SM2DISMAP0 = 0;
+  FLEXPWM4_SM2DISMAP1 = 0;
+  FLEXPWM4_OUTEN |= FLEXPWM_OUTEN_PWMA_EN(1 << 2);
+  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_LDOK(1 << 2);
+  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_RUN(1 << 2);
 #endif
 }
 
-void TLC5940Teensy4::onFrameTimerThunk_() {
+void TLC5940Teensy4::configureFrameSyncIsr_() {
+  instance_ = this;
+
+#if TLC5940_GSCLK_FREQUENCY_HZ > 0 && (defined(ARDUINO_TEENSY40) || defined(ARDUINO_TEENSY41))
+  // Configure FLEXPWM4 submodule 3 as a frame timer that overflows once per
+  // 4096 GSCLK cycles, then drives BLANK/XLAT from its reload interrupt.
+  uint32_t frameTicks = (F_BUS_ACTUAL / TLC5940_GSCLK_FREQUENCY_HZ) * 4096U;
+  uint8_t prescalePow2 = 0;
+  while (frameTicks > 65535U && prescalePow2 < 7) {
+    frameTicks = (frameTicks + 1U) >> 1;
+    ++prescalePow2;
+  }
+
+  if (frameTicks < 2U) {
+    frameTicks = 2U;
+  }
+
+  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_CLDOK(1 << 3);
+  FLEXPWM4_SM3CTRL2 = FLEXPWM_SMCTRL2_INDEP;
+  FLEXPWM4_SM3CTRL = FLEXPWM_SMCTRL_FULL | FLEXPWM_SMCTRL_PRSC(prescalePow2);
+  FLEXPWM4_SM3INIT = 0;
+  FLEXPWM4_SM3VAL0 = 0;
+  FLEXPWM4_SM3VAL1 = static_cast<uint16_t>(frameTicks - 1U);
+  FLEXPWM4_SM3DISMAP0 = 0;
+  FLEXPWM4_SM3DISMAP1 = 0;
+
+  FLEXPWM4_SM3STS = FLEXPWM_SMSTS_RF;
+  FLEXPWM4_SM3INTEN = FLEXPWM_SMINTEN_RIE;
+
+  attachInterruptVector(IRQ_FLEXPWM4_3, onFrameSyncIsr_);
+  NVIC_SET_PRIORITY(IRQ_FLEXPWM4_3, 32);
+  NVIC_ENABLE_IRQ(IRQ_FLEXPWM4_3);
+
+  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_LDOK(1 << 3);
+  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_RUN(1 << 3);
+#endif
+}
+
+void TLC5940Teensy4::onFrameSyncIsr_() {
+#if TLC5940_GSCLK_FREQUENCY_HZ > 0 && (defined(ARDUINO_TEENSY40) || defined(ARDUINO_TEENSY41))
+  FLEXPWM4_SM3STS = FLEXPWM_SMSTS_RF;
+#endif
   if (instance_ != nullptr) {
-    instance_->onFrameTimerIsr_();
+    instance_->handleFrameSync_();
   }
 }
 
-void TLC5940Teensy4::onFrameTimerIsr_() {
+void TLC5940Teensy4::handleFrameSync_() {
+#if TLC5940_GSCLK_FREQUENCY_HZ > 0 && (defined(ARDUINO_TEENSY40) || defined(ARDUINO_TEENSY41))
+  // Stop GSCLK output while latching data.
+  FLEXPWM4_OUTEN &= ~FLEXPWM_OUTEN_PWMA_EN(1 << 2);
+#endif
+
   digitalWriteFast(TLC5940_PIN_BLANK, HIGH);
   if (pendingLatch_) {
     digitalWriteFast(TLC5940_PIN_XLAT, HIGH);
@@ -274,4 +323,8 @@ void TLC5940Teensy4::onFrameTimerIsr_() {
     setControlMode_(false);
   }
   digitalWriteFast(TLC5940_PIN_BLANK, LOW);
+
+#if TLC5940_GSCLK_FREQUENCY_HZ > 0 && (defined(ARDUINO_TEENSY40) || defined(ARDUINO_TEENSY41))
+  FLEXPWM4_OUTEN |= FLEXPWM_OUTEN_PWMA_EN(1 << 2);
+#endif
 }

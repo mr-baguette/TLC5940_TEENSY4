@@ -25,8 +25,9 @@
 #define TLC5940_PIN_BLANK 30
 #endif
 
+// For register-driven FlexPWM GSCLK output, default to Teensy 4.1 pin 5 (FlexPWM4_2 A).
 #ifndef TLC5940_PIN_GSCLK
-#define TLC5940_PIN_GSCLK 23
+#define TLC5940_PIN_GSCLK 5
 #endif
 
 #ifndef TLC5940_PIN_DCPRG
@@ -55,21 +56,6 @@
 // GSCLK generation (Hz). Set to 0 to use an external GSCLK source.
 #ifndef TLC5940_GSCLK_FREQUENCY_HZ
 #define TLC5940_GSCLK_FREQUENCY_HZ 2000000
-#endif
-
-// Use CCM_CLKO output for GSCLK when available (Teensy 4.x). Requires a CCM_CLKO pin.
-#ifndef TLC5940_GSCLK_USE_CCM_CLKO
-#define TLC5940_GSCLK_USE_CCM_CLKO 0
-#endif
-
-// CCM_CLKO pin to use when TLC5940_GSCLK_USE_CCM_CLKO is enabled.
-#ifndef TLC5940_GSCLK_CCM_CLKO_PIN
-#define TLC5940_GSCLK_CCM_CLKO_PIN 23
-#endif
-
-// Divider for CCM_CLKO output when enabled (1 = no divide).
-#ifndef TLC5940_GSCLK_CCM_CLKO_DIVIDER
-#define TLC5940_GSCLK_CCM_CLKO_DIVIDER 24 // 480/24 = 20 MHz
 #endif
 
 // Dot-correction support (requires VPRG wiring).
