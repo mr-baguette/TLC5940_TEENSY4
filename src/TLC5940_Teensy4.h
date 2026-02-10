@@ -31,7 +31,20 @@ public:
   XerrType xerrType() const;
 
 private:
-  static TLC5940Teensy4* instance_;
+    volatile bool pendingLatch_ = false; 
+    
+    // Internal hardware setup
+    void configureTimers_(); 
+    
+    // Statics for the hardware interrupt
+    static TLC5940Teensy4* instance_;
+    static void onFrameSyncIsr_(); 
+
+    // Keep these as empty stubs for now so you don't have to 
+    // hunt down and delete calls to them elsewhere.
+    void configureGsclk_() {}
+    void configureFrameSyncIsr_() {}
+    void handleFrameSync_() {}
 
   uint16_t grayscale_[kChannels];
 #if TLC5940_VPRG_ENABLED
@@ -50,10 +63,6 @@ private:
   void writeBitBangByte_(uint8_t value);
   void pulseBlank_();
   void updateXerrType_(bool xerrLow, bool blankPulseActive);
-  void configureGsclk_();
-  void configureFrameSyncIsr_();
-  static void onFrameSyncIsr_();
-  void handleFrameSync_();
 };
 
 #endif // TLC5940_TEENSY4_H
