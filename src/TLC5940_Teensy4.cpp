@@ -12,9 +12,9 @@
 TLC5940Teensy4* TLC5940Teensy4::instance_ = nullptr;
 
 TLC5940Teensy4::TLC5940Teensy4() {
-  setAll(0);
+    setAll(0);
 #if TLC5940_VPRG_ENABLED
-  setAllDc(0x3F);
+    setAllDc(0x3F);
 #endif
 }
 
@@ -73,10 +73,9 @@ void TLC5940Teensy4::setAllDc(uint8_t value) {
 #endif
 
 void TLC5940Teensy4::update() {
-  setControlMode_(false);
-  writeGrayscaleData_();
-  // The ISR will see this flag and handle the Latch at the exact right moment
-  pendingLatch_ = true; 
+    setControlMode_(false);
+    writeGrayscaleData_();
+    pendingLatch_ = true;
 }
 
 #if TLC5940_VPRG_ENABLED
@@ -206,66 +205,59 @@ void TLC5940Teensy4::updateXerrType_(bool xerrLow, bool blankPulseActive) {
 // FIXED TIMER CONFIGURATION
 // ----------------------------------------------------------------------
 void TLC5940Teensy4::configureTimers_() {
-  CCM_CCGR4 |= CCM_CCGR4_PWM4(CCM_CCGR_ON); // Power on FlexPWM4
-  
+    CCM_CCGR4 |= CCM_CCGR4_PWM4(CCM_CCGR_ON);
 #if defined(CORE_PIN5_CONFIG)
-  CORE_PIN5_CONFIG = 1; // Direct hardware control of Pin 5
+    CORE_PIN5_CONFIG = 1; 
 #endif
 
-  uint32_t busFreq = F_BUS_ACTUAL; // Usually 150MHz
-  uint32_t gsclkTicks = busFreq / TLC5940_GSCLK_FREQUENCY_HZ;
-  
-  // Calculate Frame Ticks (Exactly 4096 GSCLK cycles)
-  uint32_t totalFrameTicks = gsclkTicks * 4096;
-  uint8_t prescaler = 0;
-  while (totalFrameTicks > 65535) {
-      totalFrameTicks >>= 1;
-      prescaler++;
-  }
+    uint32_t gsclkTicks = F_BUS_ACTUAL / TLC5940_GSCLK_FREQUENCY_HZ;
+    uint32_t totalFrameTicks = gsclkTicks * 4096;
+    uint8_t prescaler = 0;
+    while (totalFrameTicks > 65535) {
+        totalFrameTicks >>= 1;
+        prescaler++;
+    }
 
-  // Configure SM2 (GSCLK generator)
-  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_CLDOK(1 << 2);
-  FLEXPWM4_SM2CTRL = FLEXPWM_SMCTRL_FULL | FLEXPWM_SMCTRL_PRSC(0);
-  FLEXPWM4_SM2INIT = 0;
-  FLEXPWM4_SM2VAL1 = gsclkTicks - 1;
-  FLEXPWM4_SM2VAL3 = gsclkTicks / 2; // 50% Duty cycle
-  FLEXPWM4_OUTEN |= FLEXPWM_OUTEN_PWMA_EN(1 << 2);
+    // GSCLK: SM2
+    FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_CLDOK(1 << 2);
+    FLEXPWM4_SM2CTRL = FLEXPWM_SMCTRL_FULL | FLEXPWM_SMCTRL_PRSC(0);
+    FLEXPWM4_SM2INIT = 0;
+    FLEXPWM4_SM2VAL1 = gsclkTicks - 1;
+    FLEXPWM4_SM2VAL3 = gsclkTicks / 2;
+    FLEXPWM4_OUTEN |= FLEXPWM_OUTEN_PWMA_EN(1 << 2);
 
-  // Configure SM3 (Internal BLANK trigger)
-  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_CLDOK(1 << 3);
-  FLEXPWM4_SM3CTRL = FLEXPWM_SMCTRL_FULL | FLEXPWM_SMCTRL_PRSC(prescaler);
-  FLEXPWM4_SM3VAL1 = totalFrameTicks - 1;
-  FLEXPWM4_SM3STS = FLEXPWM_SMSTS_RF; 
-  FLEXPWM4_SM3INTEN = FLEXPWM_SMINTEN_RIE; // Interrupt on reload
-  
-  instance_ = this;
-  attachInterruptVector(IRQ_FLEXPWM4_3, onFrameSyncIsr_);
-  NVIC_ENABLE_IRQ(IRQ_FLEXPWM4_3);
+    // BLANK Trigger: SM3
+    FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_CLDOK(1 << 3);
+    FLEXPWM4_SM3CTRL = FLEXPWM_SMCTRL_FULL | FLEXPWM_SMCTRL_PRSC(prescaler);
+    FLEXPWM4_SM3VAL1 = totalFrameTicks - 1;
+    FLEXPWM4_SM3STS = FLEXPWM_SMSTS_RF;
+    FLEXPWM4_SM3INTEN = FLEXPWM_SMINTEN_RIE;
 
-  // Start both timers at the EXACT same clock cycle
-  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_LDOK(1<<2 | 1<<3);
-  FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_RUN(1<<2 | 1<<3);
+    instance_ = this;
+    attachInterruptVector(IRQ_FLEXPWM4_3, onFrameSyncIsr_);
+    NVIC_ENABLE_IRQ(IRQ_FLEXPWM4_3);
+
+    // Atomic Start
+    FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_LDOK(1<<2 | 1<<3);
+    FLEXPWM4_MCTRL |= FLEXPWM_MCTRL_RUN(1<<2 | 1<<3);
 }
 
 // ----------------------------------------------------------------------
 // INTERRUPT SERVICE ROUTINE
 // ----------------------------------------------------------------------
 void TLC5940Teensy4::onFrameSyncIsr_() {
-  FLEXPWM4_SM3STS = FLEXPWM_SMSTS_RF; // Clear hardware flag
-  
-  if (instance_) {
-     digitalWriteFast(TLC5940_PIN_BLANK, HIGH);
-     
-     if (instance_->pendingLatch_) {
-        digitalWriteFast(TLC5940_PIN_XLAT, HIGH);
-        asm volatile("nop\n\tnop\n\tnop\n\tnop"); 
-        digitalWriteFast(TLC5940_PIN_XLAT, LOW);
-        instance_->pendingLatch_ = false;
-        instance_->setControlMode_(false);
-     }
-     
-     digitalWriteFast(TLC5940_PIN_BLANK, LOW);
-  }
+    FLEXPWM4_SM3STS = FLEXPWM_SMSTS_RF;
+    if (instance_) {
+        digitalWriteFast(TLC5940_PIN_BLANK, HIGH);
+        if (instance_->pendingLatch_) {
+            digitalWriteFast(TLC5940_PIN_XLAT, HIGH);
+            asm volatile("nop\n\tnop\n\tnop\n\tnop");
+            digitalWriteFast(TLC5940_PIN_XLAT, LOW);
+            instance_->pendingLatch_ = false;
+            instance_->setControlMode_(false);
+        }
+        digitalWriteFast(TLC5940_PIN_BLANK, LOW);
+    }
 }
 
 // Stub for the separated configuration function Codex generated
