@@ -10,23 +10,23 @@
 
 // Pin assignments (Teensy 4.1 defaults can be overridden in a sketch).
 #ifndef TLC5940_PIN_SIN
-#define TLC5940_PIN_SIN 11
+#define TLC5940_PIN_SIN 26
 #endif
 
 #ifndef TLC5940_PIN_SCLK
-#define TLC5940_PIN_SCLK 13
+#define TLC5940_PIN_SCLK 27
 #endif
 
 #ifndef TLC5940_PIN_XLAT
-#define TLC5940_PIN_XLAT 10
+#define TLC5940_PIN_XLAT 28
 #endif
 
 #ifndef TLC5940_PIN_BLANK
-#define TLC5940_PIN_BLANK 9
+#define TLC5940_PIN_BLANK 30
 #endif
 
 #ifndef TLC5940_PIN_GSCLK
-#define TLC5940_PIN_GSCLK 8
+#define TLC5940_PIN_GSCLK 23
 #endif
 
 #ifndef TLC5940_PIN_DCPRG
@@ -34,7 +34,7 @@
 #endif
 
 #ifndef TLC5940_PIN_VPRG
-#define TLC5940_PIN_VPRG 6
+#define TLC5940_PIN_VPRG 25
 #endif
 
 // Enable hardware SPI for grayscale data transfer when possible.
@@ -44,7 +44,7 @@
 
 // Select which SPI bus to use (e.g. SPI, SPI1, SPI2 on Teensy 4.1).
 #ifndef TLC5940_SPI_CLASS
-#define TLC5940_SPI_CLASS SPI
+#define TLC5940_SPI_CLASS SPI1
 #endif
 
 // SPI settings
@@ -59,7 +59,7 @@
 
 // Use CCM_CLKO output for GSCLK when available (Teensy 4.x). Requires a CCM_CLKO pin.
 #ifndef TLC5940_GSCLK_USE_CCM_CLKO
-#define TLC5940_GSCLK_USE_CCM_CLKO 0
+#define TLC5940_GSCLK_USE_CCM_CLKO 1
 #endif
 
 // CCM_CLKO pin to use when TLC5940_GSCLK_USE_CCM_CLKO is enabled.
@@ -69,7 +69,7 @@
 
 // Divider for CCM_CLKO output when enabled (1 = no divide).
 #ifndef TLC5940_GSCLK_CCM_CLKO_DIVIDER
-#define TLC5940_GSCLK_CCM_CLKO_DIVIDER 1
+#define TLC5940_GSCLK_CCM_CLKO_DIVIDER 24 // 480/24 = 20 MHz
 #endif
 
 // Dot-correction support (requires VPRG wiring).
