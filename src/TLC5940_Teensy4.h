@@ -31,12 +31,16 @@ public:
   XerrType xerrType() const;
 
 private:
+  static TLC5940Teensy4* instance_;
+
   uint16_t grayscale_[kChannels];
 #if TLC5940_VPRG_ENABLED
   uint8_t dotCorrection_[kChannels];
 #endif
   uint32_t lastBlankPulseMicros_ = 0;
   XerrType lastXerrType_ = XerrType::kNone;
+  volatile bool pendingLatch_ = false;
+  IntervalTimer frameTimer_;
 
   void writeGrayscaleData_();
 #if TLC5940_VPRG_ENABLED
@@ -48,6 +52,8 @@ private:
   void pulseBlank_();
   void updateXerrType_(bool xerrLow, bool blankPulseActive);
   void configureGsclk_();
+  static void onFrameTimerThunk_();
+  void onFrameTimerIsr_();
 };
 
 #endif // TLC5940_TEENSY4_H

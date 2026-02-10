@@ -4,6 +4,8 @@
 #include <SPI.h>
 #endif
 
+TLC5940Teensy4* TLC5940Teensy4::instance_ = nullptr;
+
 TLC5940Teensy4::TLC5940Teensy4() {
   setAll(0);
 #if TLC5940_VPRG_ENABLED
@@ -32,6 +34,12 @@ void TLC5940Teensy4::begin() {
   setControlMode_(false);
 
   configureGsclk_();
+
+  instance_ = this;
+#if TLC5940_GSCLK_FREQUENCY_HZ > 0
+  const float framePeriodUs = 4096.0f * (1000000.0f / TLC5940_GSCLK_FREQUENCY_HZ);
+  frameTimer_.begin(onFrameTimerThunk_, framePeriodUs);
+#endif
 
   digitalWrite(TLC5940_PIN_BLANK, LOW);
 }
@@ -70,20 +78,28 @@ void TLC5940Teensy4::setAllDc(uint8_t value) {
 
 void TLC5940Teensy4::update() {
   setControlMode_(false);
-  digitalWrite(TLC5940_PIN_BLANK, HIGH);
   writeGrayscaleData_();
+  pendingLatch_ = true;
+#if TLC5940_GSCLK_FREQUENCY_HZ == 0
+  digitalWrite(TLC5940_PIN_BLANK, HIGH);
   latch_();
   digitalWrite(TLC5940_PIN_BLANK, LOW);
+  pendingLatch_ = false;
+#endif
 }
 
 #if TLC5940_VPRG_ENABLED
 void TLC5940Teensy4::updateDc() {
   setControlMode_(true);
-  digitalWrite(TLC5940_PIN_BLANK, HIGH);
   writeDotCorrectionData_();
+  pendingLatch_ = true;
+#if TLC5940_GSCLK_FREQUENCY_HZ == 0
+  digitalWrite(TLC5940_PIN_BLANK, HIGH);
   latch_();
   digitalWrite(TLC5940_PIN_BLANK, LOW);
+  pendingLatch_ = false;
   setControlMode_(false);
+#endif
 }
 #endif
 
@@ -235,7 +251,27 @@ void TLC5940Teensy4::configureGsclk_() {
     return;
   }
 #endif
+  // Teensy 4.x analogWrite backend is FlexPWM-based; keep GSCLK generation on
+  // hardware PWM while BLANK/XLAT are synchronized by frameTimer_ ISR.
   analogWriteFrequency(TLC5940_PIN_GSCLK, TLC5940_GSCLK_FREQUENCY_HZ);
   analogWrite(TLC5940_PIN_GSCLK, 128);
 #endif
+}
+
+void TLC5940Teensy4::onFrameTimerThunk_() {
+  if (instance_ != nullptr) {
+    instance_->onFrameTimerIsr_();
+  }
+}
+
+void TLC5940Teensy4::onFrameTimerIsr_() {
+  digitalWriteFast(TLC5940_PIN_BLANK, HIGH);
+  if (pendingLatch_) {
+    digitalWriteFast(TLC5940_PIN_XLAT, HIGH);
+    asm volatile("nop\n\tnop\n\tnop\n\tnop\n\t");
+    digitalWriteFast(TLC5940_PIN_XLAT, LOW);
+    pendingLatch_ = false;
+    setControlMode_(false);
+  }
+  digitalWriteFast(TLC5940_PIN_BLANK, LOW);
 }

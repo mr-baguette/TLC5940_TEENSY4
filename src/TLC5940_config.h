@@ -59,7 +59,7 @@
 
 // Use CCM_CLKO output for GSCLK when available (Teensy 4.x). Requires a CCM_CLKO pin.
 #ifndef TLC5940_GSCLK_USE_CCM_CLKO
-#define TLC5940_GSCLK_USE_CCM_CLKO 1
+#define TLC5940_GSCLK_USE_CCM_CLKO 0
 #endif
 
 // CCM_CLKO pin to use when TLC5940_GSCLK_USE_CCM_CLKO is enabled.
