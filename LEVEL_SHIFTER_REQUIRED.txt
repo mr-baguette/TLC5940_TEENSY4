@@ -1,0 +1,205 @@
+================================================================================
+TLC5940 + TEENSY 4.1 - REAL SOLUTION (Level Shifter Required)
+================================================================================
+
+BAD NEWS: Pull-ups + Open-Drain DON'T WORK with this library
+=============================================================
+
+The TLC5940_Teensy4 library uses:
+- Hardware SPI (for fast data transfer)
+- Hardware PWM timers (for GSCLK and BLANK)
+
+These hardware peripherals on Teensy 4.x DO NOT support open-drain mode.
+When you call SPI.begin() or analogWrite(), they reconfigure the pins
+to their peripheral function, which overrides any OUTPUT_OPENDRAIN setting.
+
+This is why initialization was hanging - the library was broken.
+
+
+ACTUAL SOLUTION: USE A LEVEL SHIFTER
+=====================================
+
+You need hardware level shifting. Here are your options:
+
+
+OPTION 1: Level Shifter Board (RECOMMENDED - $2-5)
+---------------------------------------------------
+
+Buy a bidirectional level shifter board:
+- TXS0108E (8-channel, Texas Instruments) - Best choice
+- 74AHCT125 (4-channel, unidirectional) - Cheaper
+- BSS138-based boards (common on Amazon/eBay)
+
+Wiring:
+```
+Teensy 4.1          Level Shifter         TLC5940
+-----------         --------------         --------
+3.3V ------------> VCCA
+                    VCCB <---------------- 5V
+GND -------------> GND <------------------ GND
+
+Pin 26 (MOSI) ---> A1 --- B1 -----------> Pin 26 (SIN)
+Pin 27 (SCK)  ---> A2 --- B2 -----------> Pin 25 (SCLK)
+Pin 3  (XLAT) ---> A3 --- B3 -----------> Pin 24 (XLAT)
+Pin 2  (BLANK)---> A4 --- B4 -----------> Pin 23 (BLANK)
+Pin 5  (GSCLK)---> A5 --- B5 -----------> Pin 18 (GSCLK)
+```
+
+Pros:
+✓ Clean, reliable solution
+✓ No library modifications needed
+✓ Works perfectly
+✓ Fast (minimal delay)
+
+Cons:
+✗ Costs $2-5
+✗ Takes up breadboard space
+
+
+OPTION 2: Power TLC5940 at 3.3V (QUICK TEST)
+---------------------------------------------
+
+Change TLC5940 power from 5V to 3.3V:
+- TLC Pin 21 (VCC) → 3.3V (instead of 5V)
+- TLC Pin 19 (DCPRG) → 3.3V
+
+This lowers the logic threshold to 2.64V, so Teensy's 3.3V works!
+
+Pros:
+✓ No extra components
+✓ Quick to test
+
+Cons:
+✗ LEDs will be MUCH dimmer (3.3V - Vf leaves less headroom)
+✗ May not work with high Vf LEDs (blue, white)
+✗ TLC5940 minimum VCC is 3.0V (3.3V is marginal)
+✗ Reduced current capability
+
+
+OPTION 3: Use Original Tlc5940 Library with Bit-Bang
+-----------------------------------------------------
+
+The old Tlc5940 library (not TLC5940_Teensy4) can use bit-bang mode,
+which DOES work with pull-ups because it's pure GPIO, not hardware peripherals.
+
+In the Tlc5940 library's pinout file, enable bit-bang mode.
+
+Pros:
+✓ Pull-ups work with bit-bang
+✓ No level shifter needed
+
+Cons:
+✗ Much slower (~100x slower than hardware SPI)
+✗ More CPU overhead
+✗ That library is modified for LED matrices (complicated)
+
+
+OPTION 4: DIY Level Shifter with MOSFETs
+-----------------------------------------
+
+If you have BSS138 MOSFETs and resistors:
+
+Per signal (repeat 5 times):
+```
+Teensy Pin ----+---- 10kΩ ----+---- TLC5940 Pin
+               |               |
+               |               +---- 10kΩ ---- 5V
+               |               |
+               +---[BSS138]----+
+                   |
+                   GND
+```
+
+BSS138 pinout: Gate=Teensy, Source=GND, Drain=TLC/5V
+
+This creates a bidirectional level shifter.
+
+Pros:
+✓ Cheap if you have parts
+✓ Works well
+
+Cons:
+✗ Tedious to wire 5 channels
+✗ Easy to make mistakes
+
+
+RECOMMENDED: OPTION 1 (Level Shifter Board)
+============================================
+
+Just buy a TXS0108E board. They're $2-5 on Amazon/eBay and work perfectly.
+
+Search: "TXS0108E level shifter"
+Or: "8 channel logic level converter"
+
+Example products:
+- SparkFun BOB-12009
+- Adafruit 395
+- Generic TXS0108E boards (purple PCB)
+
+
+TESTING WITHOUT LEVEL SHIFTER (Temporary):
+===========================================
+
+To verify everything else works, try Option 2 temporarily:
+
+1. Change TLC5940 VCC from 5V to 3.3V
+2. Upload the BasicDiagnostic example
+3. If that works, upload your actual code
+4. If LEDs work (even if dim), hardware is good!
+5. Then add proper level shifter for full brightness
+
+
+WHY ARDUINO MEGA WORKS BUT TEENSY DOESN'T:
+===========================================
+
+Arduino Mega (ATmega2560):
+- Native 5V I/O ✓
+- Works directly with 5V TLC5940
+
+Teensy 4.1 (IMXRT1062):
+- Native 3.3V I/O ✗
+- TLC5940 needs 4.0V minimum (0.8 × 5V)
+- 3.3V < 4.0V = doesn't work reliably
+- MUST use level shifter or power TLC at 3.3V
+
+
+LIBRARY STATUS:
+===============
+
+TLC5940_Teensy4 library is now FIXED (open-drain disabled).
+It should work with:
+✓ Level shifter between Teensy and TLC5940
+✓ TLC5940 powered at 3.3V (dim but works)
+✗ Direct connection with pull-ups (hardware peripherals don't support this)
+
+
+NEXT STEPS:
+===========
+
+1. Upload BasicDiagnostic example to verify Teensy is working
+2. Choose Option 1 or 2 above
+3. If Option 1: Get level shifter board ($2-5, arrives in days)
+4. If Option 2: Change TLC VCC to 3.3V for testing
+5. Upload your actual code
+6. Should work!
+
+
+SORRY FOR THE CONFUSION:
+=========================
+
+My previous advice about pull-ups + open-drain was incorrect for this
+specific library because it uses hardware peripherals (SPI, PWM).
+
+That technique DOES work for:
+- Pure GPIO bit-banging
+- Software SPI
+- The old Tlc5940 library in bit-bang mode
+
+But NOT for:
+- Hardware SPI
+- Hardware PWM (analogWrite)
+- The TLC5940_Teensy4 library
+
+The level shifter is the proper solution.
+
+================================================================================
